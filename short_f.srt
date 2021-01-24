@@ -1,0 +1,28 @@
+1
+00:00:00,000 --> 00:00:04,946
+Data mining technology offers a powerful instrument for acquiring knowledge.
+
+2
+00:00:04,946 --> 00:00:21,002
+Knowledge concerning individuals sometimes contains details considered too sensitive to be disclosed, which has caused researchers to take an interest in developing data mining methods that produce high quality results while guaranteeing the privacy of the people involved.
+
+3
+00:00:21,002 --> 00:00:31,869
+Research on the ethics of data mining has, however, largely neglected the possibility of using the technology in ways that are not merely ethically sound but positively commendable.
+
+4
+00:00:31,869 --> 00:00:36,177
+The purpose of this paper is to bring the situation closer to balance.
+
+5
+00:00:36,177 --> 00:00:46,126
+The social-ethical aspect of data mining is viewed from both perspectives: what makes it a threat, on the one hand, and what makes it an opportunity, on the other.
+
+6
+00:00:46,126 --> 00:00:58,955
+We find that there are justified concerns over the effects on civil liberties of certain uses of data mining, but also that there are many benefits to be reaped in such fields as crime investigation and medical diagnostics.
+
+7
+00:00:58,955 --> 00:01:09,857
+Being aware of the whole ethical equation, not just one side of it, will help researchers and practitioners of data mining analyse the implications of their work more accurately.
+
