@@ -9,6 +9,12 @@ from util import parse_lrc_time, parse_srt_time, get_cn_num, cn_sent_tokenize, p
 
 import zmq
 
+DATA_DIR = "./synthesizer_data"
+MODEL_DIR =DATA_DIR + "/models/"
+
+class HandledException(Exception):
+    pass
+
 # noinspection PyAttributeOutsideInit
 class Converter:
     def comm(self, cmd, msg=""):
@@ -21,33 +27,41 @@ class Converter:
         self.comm("[log]", msg)
 
     def __init__(self, out_dir=".", out_name="out", comm=None, lang="zh", background=True):
+        print("CONVERTER RUNNING!")
         self.custom_esp = None
         self.custom_vocoder = None
         self.tag = None
         self.vocoder_tag = None
         self.model_reload_needed = False
+        self.socket = zmq.Context().socket(zmq.PUB)
+        self.socket.bind("tcp://127.0.0.1:10290")
+        self.socket.setsockopt(zmq.LINGER, 0)
         self.convert_executor = ThreadPoolExecutor(max_workers=1)
         if background: self.convert_executor.submit(self._initialize, out_dir, out_name, comm, lang)
         else: self._initialize(out_dir, out_name, comm, lang)
-        self.socket = zmq.Context().socket(zmq.PUB)
-        self.socket.bind("tcp://127.0.0.1:10290")
         # print("Converter exited init")
 
     def _initialize(self, out_dir, out_name, comm, lang):
-        # self.comm = comm
-        self.calibre_supported = shutil.which("ebook-convert") is not None
-        self.txt = ""
-        self.out_dir = out_dir
-        self.out_name = out_name
-        self.force_calibre = False
-        self.autoDetectLang = True
-        if lang:
-            self.language = lang
-            self.setup_model_config()
-            self.setup_model()
-        self.save_executor = ThreadPoolExecutor(max_workers=1)
-        self.save_tasks = []
-        self.output_status("Converter initialized.")
+        try:
+            # self.comm = comm
+            self.calibre_supported = shutil.which("ebook-convert") is not None
+            self.txt = ""
+            self.out_dir = out_dir
+            self.out_name = out_name
+            self.force_calibre = False
+            self.autoDetectLang = True
+            if lang:
+                self.language = lang
+                self.setup_model_config()
+                self.setup_model()
+            self.save_executor = ThreadPoolExecutor(max_workers=1)
+            self.save_tasks = []
+            self.output_status("Converter initialized.")
+        except HandledException:
+            raise
+        except Exception as e:
+            print("INIT ERROR:", e)
+            self.output_err("Initialization error", e)
 
     def output_status(self, s: str, end="\n"):
         print(s, end=end)
@@ -76,10 +90,10 @@ class Converter:
 
     def set_text(self, txt):
         if self.force_calibre:
-            with open("./temp.txt", encoding="utf-8", mode="w") as tmp:
+            with open("/temp.txt", encoding="utf-8", mode="w") as tmp:
                 tmp.write(txt)
-            self.txt = self.use_calibre("./temp.txt")
-            os.remove("./temp.txt")
+            self.txt = self.use_calibre("/temp.txt")
+            os.remove("/temp.txt")
         else: self.txt = txt
 
     def preprocess_text(self):
@@ -103,10 +117,14 @@ class Converter:
 
     def detect_language(self, executor=True):
         self.output_status("Detecting language...", end=" ")
-        from textblob import TextBlob
+        # from textblob import TextBlob
 
-        b = TextBlob(self.txt[:1000])
-        lang = b.detect_language()
+        # b = TextBlob(self.txt[:1000])
+        # lang = b.detect_language()
+        from langdetect import detect, DetectorFactory
+        DetectorFactory.seed = 0 # enforcing consistent output
+        lang = detect(self.txt[:1000])
+
         if "zh" in lang: lang = "zh"
         self.output_status("English" if lang == 'en' else "中文（普通话）")
         self.set_language(lang, executor)
@@ -178,54 +196,58 @@ class Converter:
             self.model_reload_needed = True
 
     def setup_model(self):
-        self.model_reload_needed = False
-        self.output_status("Loading nltk...")
-
-        # setup nltk
-        import nltk
-        nltk.data.path.append('./nltk_models')
         try:
-            nltk.data.find('tokenizers/punkt')
-        except LookupError:
-            nltk.download('punkt', download_dir="./nltk_models")
+            self.model_reload_needed = False
+            self.output_status("Loading nltk...")
 
-        self.output_status("Loading torch...", end=" ")
+            # setup nltk
+            import nltk
+            nltk.data.path.append(MODEL_DIR + '/nltk_models')
+            try:
+                nltk.data.find('tokenizers/punkt')
+            except LookupError:
+                nltk.download('punkt', download_dir=MODEL_DIR + "/nltk_models")
 
-        # setup model
-        import torch
-        from espnet_model_zoo.downloader import ModelDownloader
-        from espnet2.bin.tts_inference import Text2Speech
-        from parallel_wavegan.utils import download_pretrained_model
-        from parallel_wavegan.utils import load_model
+            self.output_status("Loading torch...", end=" ")
 
-        self.mlDevice = "cuda" if torch.cuda.is_available() else "cpu"
-        self.output_status("Running on " + self.mlDevice)
+            # setup model
+            import torch
+            from espnet_model_zoo.downloader import ModelDownloader
+            from espnet2.bin.tts_inference import Text2Speech
+            from parallel_wavegan.utils import download_pretrained_model
+            from parallel_wavegan.utils import load_model
 
-        self.output_status("Loading espnet...")
+            self.mlDevice = "cuda" if torch.cuda.is_available() else "cpu"
+            self.output_status("Running on " + self.mlDevice)
 
-        d = ModelDownloader("./espnet_models")
-        self.text2speech = Text2Speech(
-            **d.download_and_unpack(self.tag),
-            device=self.mlDevice,
-            # Only for Tacotron 2
-            threshold=0.5,
-            minlenratio=0.0,
-            maxlenratio=10.0,
-            use_att_constraint=False,
-            backward_window=1,
-            forward_window=3,
-            # Only for FastSpeech & FastSpeech2
-            speed_control_alpha=1.0,
-        )
-        self.text2speech.spc2wav = None  # Disable griffin-lim
-        # NOTE: Sometimes download is failed due to "Permission denied". That is
-        #   the limitation of google drive. Please retry after serveral hours.
+            self.output_status("Loading espnet...")
 
-        self.output_status("Loading vocoder models...")
+            d = ModelDownloader(MODEL_DIR + "/espnet_models")
+            self.text2speech = Text2Speech(
+                **d.download_and_unpack(self.tag),
+                device=self.mlDevice,
+                # Only for Tacotron 2
+                threshold=0.5,
+                minlenratio=0.0,
+                maxlenratio=10.0,
+                use_att_constraint=False,
+                backward_window=1,
+                forward_window=3,
+                # Only for FastSpeech & FastSpeech2
+                speed_control_alpha=1.0,
+            )
+            self.text2speech.spc2wav = None  # Disable griffin-lim
+            # NOTE: Sometimes download is failed due to "Permission denied". That is
+            #   the limitation of google drive. Please retry after serveral hours.
 
-        self.vocoder = load_model(download_pretrained_model(self.vocoder_tag, download_dir='./vocoder_models')).to(self.mlDevice).eval()
-        self.vocoder.remove_weight_norm()
-        self.output_status("Model setup completed.")
+            self.output_status("Loading vocoder models...")
+
+            self.vocoder = load_model(download_pretrained_model(self.vocoder_tag, download_dir=MODEL_DIR + "/vocoder_models")).to(self.mlDevice).eval()
+            self.vocoder.remove_weight_norm()
+            self.output_status("Model setup completed.")
+        except Exception as e:
+            self.output_err("Model error", e)
+            raise HandledException()
 
     def pre_convert(self):
         self.preprocess_text()
@@ -284,15 +306,15 @@ class Converter:
                 # import stanza
                 # nlp = None
                 # try:
-                #     nlp = stanza.Pipeline(lang=language, processors='tokenize', dir="./stanza_models")
+                #     nlp = stanza.Pipeline(lang=language, processors='tokenize', dir=MODEL_DIR + "/stanza_models")
                 # except:
-                #     stanza.download(lang=language, dir="./stanza_models")
-                #     nlp = stanza.Pipeline(lang=language, processors='tokenize', dir="./stanza_models")
+                #     stanza.download(lang=language, dir=MODEL_DIR + "/stanza_models")
+                #     nlp = stanza.Pipeline(lang=language, processors='tokenize', dir=MODEL_DIR + "/stanza_models")
                 # doc = nlp(txt)
                 # sentence_list = [s.text for s in doc.sentences]
                 # end of stanza usage
 
-                # if not os.path.exists("./tmp"): os.mkdir("./tmp")
+                # if not os.path.exists(MODEL_DIR + "/tmp"): os.mkdir(MODEL_DIR + "/tmp")
 
                 srt = ""
                 lrc = ""
@@ -329,7 +351,12 @@ class Converter:
             self.comm("[conversion-done]")
             self.output_status("Conversion done!")
         except Exception as e:
-            self.output_status("\n----------------------------------------\nConversion error: " + str(e) + "\n----------------------------------------\n")
+            self.output_err("Conversion error")
+
+    def output_err(self, err_type, e):
+        import traceback
+        self.output_status(f"\n[ERROR]\n----------------------------------------\n{err_type}: " + str(e) + f"\n{''.join(traceback.format_exception(type(e),e, e.__traceback__))}----------------------------------------\n[END OF ERROR]")
+
 
     def convert(self, background=True):
         if background: self.convert_executor.submit(self._convert)
@@ -360,6 +387,7 @@ class ConverterController:
         self.socket = socket
         socket.connect("tcp://127.0.0.1:10289")
         socket.setsockopt(zmq.SUBSCRIBE, b"")
+        socket.setsockopt(zmq.LINGER, 0)
         while True:
             msg = socket.recv_string()
             cmd, data = msg.split("|", maxsplit=1)

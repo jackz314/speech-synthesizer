@@ -1,0 +1,4 @@
+dist/
+build/
+synthesizer_data/models
+__pycache__/
