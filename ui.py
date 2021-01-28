@@ -17,6 +17,12 @@ from PySide2.QtGui import QColor, QDesktopServices, QFont, QIcon, QTextCursor
 
 import os
 
+import locale
+sys_lang = locale.getdefaultlocale()[0]
+if "en" in sys_lang: sys_lang = "en"
+else: sys_lang = "zh"
+calibre_link = f"https://calibre-ebook.com{'' if sys_lang == 'en' else '/zh_CN'}/download"
+
 DATA_DIR = "./synthesizer_data"
 RES_DIR = DATA_DIR + "/resources/"
 
@@ -80,14 +86,14 @@ class Main(QMainWindow):
     @Slot(str)
     def update_text_input(self, s):
         self.text_input.setPlainText(s)
-        self.text_input.setPlaceholderText("Paste in text you want to hear, or select a file to see its content here.")
+        self.text_input.setPlaceholderText("Paste in text you want to hear, or select a file to see its content here." if sys_lang == "en" else "输入文本或选择文件来预览")
         self.from_file = True
 
     @Slot(str)
     def show_download_dialog(self, s):
         reply = QMessageBox.information(self, "Download Calibre", s, QMessageBox.Ok | QMessageBox.Cancel)
         if reply == QMessageBox.Ok:
-            QDesktopServices.openUrl(QUrl("https://calibre-ebook.com/download"))
+            QDesktopServices.openUrl(QUrl(calibre_link))
         # msgBox.setIcon(QMessageBox.Information)
         # msgBox.setText(s)
         # msgBox.setWindowTitle("Download Calibre")
@@ -124,15 +130,15 @@ class Main(QMainWindow):
         # self.converter_executor.submit(self.converter.convert)
 
     def select_file(self):
-        fileName, _ = QFileDialog.getOpenFileName(self,"Select a file",
+        fileName, _ = QFileDialog.getOpenFileName(self,"Select a file" if sys_lang == "en" else "选择一个文档",
                                                   "","All Files (*);;Documents (*.txt *.pdf *.doc *.docx *.rtf *.htm *.html);;")
         if not fileName: return
         self.log_with_end("Reading from " + fileName)
         self.msg_sender("[file]", fileName)
-        self.text_input.setPlaceholderText("Loading file...")
+        self.text_input.setPlaceholderText("Loading file..."  if sys_lang == "en" else "加载文件中。。")
 
     def select_save_folder(self):  
-        dir_name = QFileDialog.getExistingDirectory(self,"Choose a place to save the output",self.cfg.get("main", "out_dir", fallback=""))
+        dir_name = QFileDialog.getExistingDirectory(self,"Choose a place to save the output" if sys_lang == "en" else "选择输出文件夹",self.cfg.get("main", "out_dir", fallback=""))
         if not dir_name: return
         self.log_with_end("Saving to " + dir_name)
         self.msg_sender("[out-dir]", dir_name)
@@ -148,7 +154,9 @@ class Main(QMainWindow):
             self.convert_btn.setEnabled(True)
 
     def open_result(self):
-        QDesktopServices.openUrl(QUrl.fromLocalFile(self.cfg.get("main", "out_dir", fallback=".") + "/out.wav"))
+        out_dir = self.cfg.get("main", "out_dir", fallback=".")
+        if not out_dir: out_dir = "."
+        QDesktopServices.openUrl(QUrl.fromLocalFile(out_dir + "/out.wav"))
 
     def change_lang(self, idx):
         lang = self.language_dropdown.itemData(idx)
@@ -189,21 +197,21 @@ class Main(QMainWindow):
         self.vocoder_model_dropdown.setCurrentIndex(int(self.cfg.get("main", "vocoder", fallback='0')))
         # self.vocoder_model_dropdown.currentIndexChanged.connect(self.change_vocoder_model)
 
-        self.calibre_checkbox = QCheckBox("Always use Calibre")
+        self.calibre_checkbox = QCheckBox("Always use Calibre" if sys_lang == "en" else "强制使用Calibre")
         self.calibre_checkbox.setChecked(self.cfg.get("main", "calibre", fallback='False') == "True")
         self.calibre_checkbox.stateChanged.connect(self.calibre_change)
 
-        self.file_btn = QPushButton("Open File")
+        self.file_btn = QPushButton("Open File" if sys_lang == "en" else "打开文档")
         self.file_btn.clicked.connect(self.select_file)
 
-        self.save_btn = QPushButton("Output Folder")
+        self.save_btn = QPushButton("Output Folder" if sys_lang == "en" else "输出文件夹")
         self.save_btn.clicked.connect(self.select_save_folder)
 
-        self.convert_btn = QPushButton("Convert")
+        self.convert_btn = QPushButton("Convert" if sys_lang == "en" else "转换")
         self.convert_btn.setEnabled(False)
         self.convert_btn.clicked.connect(self.start_convert)
 
-        self.result_btn = QPushButton("Open Result")
+        self.result_btn = QPushButton("Open Result" if sys_lang == "en" else "打开结果")
         self.result_btn.setEnabled(False)
         self.result_btn.clicked.connect(self.open_result)
 
@@ -260,7 +268,7 @@ class Main(QMainWindow):
 
         self.text_input = QPlainTextEdit()
         self.text_input.resize(70,100)
-        self.text_input.setPlaceholderText("Paste in text you want to hear, or select a file to see its content here.")
+        self.text_input.setPlaceholderText("Paste in text you want to hear, or select a file to see its content here." if sys_lang == "en" else "输入文本或选择文件来预览")
         font = self.text_input.font()
         font.setPointSize(12)
         self.text_input.setFont(font)

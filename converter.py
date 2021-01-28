@@ -9,6 +9,12 @@ from util import parse_lrc_time, parse_srt_time, get_cn_num, cn_sent_tokenize, p
 
 import zmq
 
+import locale
+sys_lang = locale.getdefaultlocale()[0]
+if "en" in sys_lang: sys_lang = "en"
+else: sys_lang = "zh"
+calibre_link = f"https://calibre-ebook.com{'' if sys_lang == 'en' else '/zh_CN'}/download"
+
 DATA_DIR = "./synthesizer_data"
 MODEL_DIR =DATA_DIR + "/models/"
 
@@ -68,12 +74,18 @@ class Converter:
         self.log(s + end)
 
     def use_calibre(self, file):
-        if not self.calibre_supported:
-            self.comm("[download]", "You need to install calibre to convert this type of file to text at https://calibre-ebook.com/download")
+        if self.calibre_supported:
+            self.comm("[download]", f"You need to install calibre to convert this type of file to text at {calibre_link}")
             return ""
+        self.output_status("Converting file via Calibre...")
         calibre_cmd = 'ebook-convert "' + file + f'" "{self.out_dir}/calibre_convert_{self.out_name}.txt" --enable-heuristics --unsmarten-punctuation'
         self.output_status(calibre_cmd)
-        os.system(calibre_cmd)
+        import subprocess
+        try:
+            subprocess.check_call(calibre_cmd, shell=True)
+        except subprocess.CalledProcessError as e:
+            self.output_err("Calibre error", e)
+            return ""
         with open(f'{self.out_dir}/calibre_convert_{self.out_name}.txt', encoding="utf-8", mode="r") as f:
             return f.read()
 
@@ -86,7 +98,10 @@ class Converter:
                     self.txt = f.read()
             except UnicodeDecodeError: # non-binary
                 self.txt = self.use_calibre(file)
-        self.comm("[file-content]", self.txt)
+        if not self.txt or self.txt.isspace():
+            self.output_status(f"[ERROR] couldn't get any text from file {file}, make sure it's valid and supported by Calibre")
+        else:
+            self.comm("[file-content]", self.txt)
 
     def set_text(self, txt):
         if self.force_calibre:
@@ -331,11 +346,11 @@ class Converter:
                     else:
                         t = t_preview
                     l = 0
-                    try:
-                        l = self.simple_convert(t)
-                    except Exception as e:
-                        self.output_status("\nError converting, retrying... " + str(e) + "\n")
-                        l = self.simple_convert(t[:len(t)//2]) + self.simple_convert(t[len(t)//2:])
+                    # try:
+                    l = self.simple_convert(t)
+                    # except Exception as e:
+                        # self.output_status("\nError converting, retrying... " + str(e) + "\n")
+                        # l = self.simple_convert(t[:len(t)//2]) + self.simple_convert(t[len(t)//2:])
 
                     srt += f"{i}\n{parse_srt_time(srt_time)} --> {parse_srt_time(srt_time + l / self.sample_rate)}\n{t_preview}\n\n"
                     lrc += f"[{parse_lrc_time(srt_time)}]{t_preview}\n"
