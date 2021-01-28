@@ -11,6 +11,9 @@ esp_path = espnet.__path__[0]
 import librosa
 librosa_path = librosa.__path__[0]
 
+import g2p_en
+g2p_path = g2p_en.__path__[0]
+
 a = Analysis(['ui.py'],
              pathex=['C:\\Users\\zhang\\OneDrive\\Desktop\\Projects\\ML\\file-to-speech'],
              binaries=[],
@@ -18,7 +21,8 @@ a = Analysis(['ui.py'],
              (langdetect_path + '/utils', 'langdetect/utils'),  # for messages.properties file
              (langdetect_path + '/profiles', 'langdetect/profiles'), # don't forget if you load langdetect as a submodule of your app, change the second string to the relative path from your parent module. The first argument is the relative path inside the pyinstaller bundle.
              (esp_path + "/version.txt", 'espnet'),
-             (librosa_path + "/util/example_data", "librosa/util/example_data")
+             (librosa_path + "/util/example_data", "librosa/util/example_data"),
+             (g2p_path + "/", "g2p_en")
                 ],
              hiddenimports=[],
              hookspath=[],
