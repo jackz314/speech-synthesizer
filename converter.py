@@ -74,7 +74,7 @@ class Converter:
         self.log(s + end)
 
     def use_calibre(self, file):
-        if self.calibre_supported:
+        if not self.calibre_supported:
             self.comm("[download]", f"You need to install calibre to convert this type of file to text at {calibre_link}")
             return ""
         self.output_status("Converting file via Calibre...")
@@ -364,7 +364,7 @@ class Converter:
                 concurrent.futures.wait(self.save_tasks)
                 self.save_tasks.clear()
             self.comm("[conversion-done]")
-            self.output_status("Conversion done!")
+            self.output_status("Conversion done! Saved at " + os.path.abspath(f"{self.out_dir}/{self.out_name}.wav"))
         except Exception as e:
             self.output_err("Conversion error")
 
