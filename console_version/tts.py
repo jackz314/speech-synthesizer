@@ -33,10 +33,9 @@ print(f"Got text (characters: {len(txt)})")
 
 print("Detecting language...")
 
-from textblob import TextBlob
-
-b = TextBlob(txt[:1000])
-language = b.detect_language()
+from langdetect import detect, DetectorFactory
+DetectorFactory.seed = 0 # enforcing consistent output
+language = detect(txt[:1000])
 
 sample_rate, lang, tag, vocoder_tag = None, None, None, None
 
