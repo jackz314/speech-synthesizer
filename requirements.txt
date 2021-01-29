@@ -7,7 +7,8 @@ PySide2 >= 5.15.2
 SoundFile >= 0.10.3.post1
 
 # C:\Users\zhang\OneDrive\Desktop\Projects\ML\file-to-speech\converter.py: 197
-espnet >= 0.9.7
+# espnet >= 0.9.7
+git+git://github.com/jackz314/espnet@master#egg=espnet
 
 # C:\Users\zhang\OneDrive\Desktop\Projects\ML\file-to-speech\converter.py: 196
 espnet_model_zoo >= 0.0.0a24
@@ -26,4 +27,6 @@ pyzmq >= 20.0.0
 langdetect >= 1.0.8
 
 # C:\Users\zhang\OneDrive\Desktop\Projects\ML\file-to-speech\converter.py: 195,253
-torch >= 1.7.1
+torch === 1.7.1 -f https://download.pytorch.org/whl/torch_stable.html
+torchvision===0.8.2 -f https://download.pytorch.org/whl/torch_stable.html
+torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.htmlc
