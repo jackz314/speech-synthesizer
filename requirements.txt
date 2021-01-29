@@ -27,6 +27,9 @@ pyzmq >= 20.0.0
 langdetect >= 1.0.8
 
 # C:\Users\zhang\OneDrive\Desktop\Projects\ML\file-to-speech\converter.py: 195,253
-torch === 1.7.1 -f https://download.pytorch.org/whl/torch_stable.html
-torchvision===0.8.2 -f https://download.pytorch.org/whl/torch_stable.html
-torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.htmlc
+-f https://download.pytorch.org/whl/torch_stable.html
+torch === 1.7.1
+-f https://download.pytorch.org/whl/torch_stable.html
+torchvision===0.8.2
+-f https://download.pytorch.org/whl/torch_stable.html
+torchaudio===0.7.2 
