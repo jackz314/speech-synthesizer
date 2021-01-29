@@ -1,4 +1,4 @@
-# Speech Synthesizer
+# Speech Synthesizer ![Windows Release](https://github.com/jackz314/speech-synthesizer/workflows/Deploy%20Windows%20Release/badge.svg)
 A GUI application that does end-to-end human-realistic text to speech.
 
 ### Overview
