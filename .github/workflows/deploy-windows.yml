@@ -44,17 +44,24 @@ jobs:
     - name: Build release
       run: |
         pyinstaller .\ui.spec --noconfirm
+    - name: Install 7zip
+      run: |
+        $Installer7Zip = $env:TEMP + "\7z1900-x64.msi";
+        Invoke-WebRequest "https://www.7-zip.org/a/7z1900-x64.msi" -OutFile $Installer7Zip; 
+        msiexec /i $Installer7Zip /qb; 
+        Remove-Item $Installer7Zip;
+        $env:Path += ";$env:ProgramFiles\7-zip"
     - name: Package release
       run: |
-        zip -r -9 -s 1800m ui.zip dist/ui
+        7z a -tzip -v1800m -r ui.zip ./dist/ui/
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        tag_name: CI-${{ github.ref }}
+        release_name: CI Release CI-${{ github.ref }}
         draft: false
         prerelease: false
     - name: Upload Release Asset (Part 1)
@@ -64,8 +71,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-        asset_path: ./ui.zip
-        asset_name: ui.zip
+        asset_path: ./ui.zip.001
+        asset_name: ui.zip.001
         asset_content_type: application/zip
     - name: Upload Release Asset (Part 2)
       id: upload-release-asset-2 
@@ -74,8 +81,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-        asset_path: ./ui.z01
-        asset_name: ui.z01
+        asset_path: ./ui.zip.002
+        asset_name: ui.zip.002
         asset_content_type: application/zip
 #     - name: Test with pytest
 #       run: |
