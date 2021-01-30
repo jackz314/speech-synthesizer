@@ -1,23 +1,22 @@
-from concurrent.futures.thread import ThreadPoolExecutor
 import multiprocessing
 from multiprocessing import Process
 
-import PySide2
-import zmq
-from PySide2.QtCore import QThread, QUrl, Qt, Signal, Slot
-from PySide2.QtMultimedia import QMediaPlayer
+import locale
+import multiprocessing
+import os
+import sys
+from multiprocessing import Process
 from threading import Thread
 
-from converter import Converter, ConverterController
+import PySide2
+import zmq
+from PySide2.QtCore import QUrl, Qt, Signal, Slot
+from PySide2.QtGui import QColor, QDesktopServices, QIcon, QTextCursor
+from PySide2.QtWidgets import QApplication, QMainWindow, QTextEdit, QGridLayout, QPlainTextEdit, QWidget, \
+    QPushButton, QComboBox, QVBoxLayout, QFileDialog, QMessageBox, QCheckBox
 
-import sys
-from PySide2.QtWidgets import QApplication, QLabel, QMainWindow, QTextEdit, QGridLayout, QPlainTextEdit, QWidget, \
-    QPushButton, QGroupBox, QComboBox, QVBoxLayout, QFileDialog, QMessageBox, QCheckBox
-from PySide2.QtGui import QColor, QDesktopServices, QFont, QIcon, QTextCursor
+from converter import ConverterController
 
-import os
-
-import locale
 sys_lang = locale.getdefaultlocale()[0]
 if "en" in sys_lang: sys_lang = "en"
 else: sys_lang = "zh"
@@ -32,6 +31,9 @@ class LogWidget(QTextEdit):
         if msg.lstrip().startswith("[ERROR]"):
             # print("logging error")
             self.setTextColor(Qt.red)
+        elif msg.lstrip().startswith("[DONE]"):
+            # print("logging error")
+            self.setTextColor(Qt.green)
         else:
             self.setTextColor(Qt.black)
         self.insertPlainText(msg)
@@ -39,11 +41,37 @@ class LogWidget(QTextEdit):
         if self.verticalScrollBar().value() >= self.verticalScrollBar().maximum() - 5: # scrollbar at bottom, autoscroll
             self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
 
+class InputTextEdit(QPlainTextEdit):
+
+    def set_signal(self, signal):
+        self.signal = signal
+
+    def dragEnterEvent(self, e:PySide2.QtGui.QDragEnterEvent) -> None:
+        if e.mimeData().hasUrls() and len(e.mimeData().urls()) == 1:
+            e.acceptProposedAction()
+
+    def dropEvent(self, e: PySide2.QtGui.QDropEvent) -> None:
+        if not e.mimeData().hasUrls() or len(e.mimeData().urls()) != 1:
+            print("ERROR Drop Event", e)
+            return
+        url = e.mimeData().urls()[0]
+        if not url: return
+        url = url.toLocalFile()
+        print("Got dropped file:", url)
+        self.signal.emit(url)
+
+
+# def __init__(self, parent: typing.Optional[PySide2.QtWidgets.QWidget] = ...) -> None:
+    #     super().__init__(parent)
+    #     self.setAcceptDrops(True)
+
+
 
 class Main(QMainWindow):
     new_log = Signal(str)
     new_input = Signal(str)
     new_download = Signal(str)
+    new_file = Signal(str)
     conversion_status = Signal()
 
     def msg_listener(self):
@@ -133,9 +161,14 @@ class Main(QMainWindow):
         fileName, _ = QFileDialog.getOpenFileName(self,"Select a file" if sys_lang == "en" else "选择一个文档",
                                                   "","All Files (*);;Documents (*.txt *.pdf *.doc *.docx *.rtf *.htm *.html);;")
         if not fileName: return
+        self.load_file(fileName)
+
+    @Slot(str)
+    def load_file(self, fileName):
+        self.text_input.clear()
         self.log_with_end("Reading from " + fileName)
         self.msg_sender("[file]", fileName)
-        self.text_input.setPlaceholderText("Loading file..."  if sys_lang == "en" else "加载文件中。。")
+        self.text_input.setPlaceholderText("Loading file..." if sys_lang == "en" else "加载文件中。。")
 
     def select_save_folder(self):  
         dir_name = QFileDialog.getExistingDirectory(self,"Choose a place to save the output" if sys_lang == "en" else "选择输出文件夹",self.cfg.get("main", "out_dir", fallback=""))
@@ -191,8 +224,8 @@ class Main(QMainWindow):
         # self.esp_model_dropdown.currentIndexChanged.connect(self.change_esp_model)
 
         self.vocoder_model_dropdown = QComboBox()
-        self.vocoder_model_dropdown.addItem("parallel wavegan", "parallel_wavegan")
         self.vocoder_model_dropdown.addItem("multi-band melgan", "multi_band_melgan")
+        self.vocoder_model_dropdown.addItem("parallel wavegan", "parallel_wavegan")
         self.vocoder_model_dropdown.addItem("full-band melgan", "full_band_melgan")
         self.vocoder_model_dropdown.setCurrentIndex(int(self.cfg.get("main", "vocoder", fallback='0')))
         # self.vocoder_model_dropdown.currentIndexChanged.connect(self.change_vocoder_model)
@@ -266,7 +299,9 @@ class Main(QMainWindow):
         self.main_layout = QGridLayout()
         self.centralWidget().setLayout(self.main_layout)
 
-        self.text_input = QPlainTextEdit()
+        self.text_input = InputTextEdit()
+        self.text_input.set_signal(self.new_file)
+        self.new_file.connect(self.load_file)
         self.text_input.resize(70,100)
         self.text_input.setPlaceholderText("Paste in text you want to hear, or select a file to see its content here." if sys_lang == "en" else "输入文本或选择文件来预览")
         font = self.text_input.font()
@@ -282,8 +317,6 @@ class Main(QMainWindow):
 
         self.control_group = self.create_control_group()
 
-        self.audio_player = QMediaPlayer()
-
         self.main_layout.addWidget(self.text_input, 0, 0)
         self.main_layout.addWidget(self.status_output, 2, 0, 1, 3)
         self.main_layout.addLayout(self.control_group, 0, 1)
@@ -294,7 +327,7 @@ class Main(QMainWindow):
 
         self.show()
 
-        self.log_with_end("Initializing converter")
+        self.log_with_end("Initializing converter" if sys_lang == 'en' else '正在初始化转换器')
         self.init_converter()
         self.msg_thread = Thread(target=self.msg_listener)
         self.msg_thread.setDaemon(True)

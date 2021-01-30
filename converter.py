@@ -4,8 +4,8 @@ import time
 import shutil
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from util import parse_lrc_time, parse_srt_time, get_cn_num, cn_sent_tokenize, process_cn_text, get_full_esp_model_tag, \
-    get_full_vocoder_model_tag
+from util import parse_lrc_time, parse_srt_time, replace_with_cn_num, cn_sent_tokenize, preprocess_cn_text, get_full_esp_model_tag, \
+    get_full_vocoder_model_tag, general_preprocess
 
 import zmq
 
@@ -100,6 +100,7 @@ class Converter:
                 self.txt = self.use_calibre(file)
         if not self.txt or self.txt.isspace():
             self.output_status(f"[ERROR] couldn't get any text from file {file}, make sure it's valid and supported by Calibre")
+            self.comm("[file-content]", "")
         else:
             self.comm("[file-content]", self.txt)
 
@@ -270,21 +271,25 @@ class Converter:
         if os.path.isfile(self.out_name + ".wav"): os.remove(self.out_name + ".wav")
 
     def save_wav(self, wav, overwrite=False):
-        out_arr = wav.view(-1).cpu().numpy()
-        fname = self.out_dir + "/" + self.out_name + ".wav"
-        import soundfile
-        from soundfile import SoundFile
-        if overwrite:
-            soundfile.write(fname, out_arr, samplerate=self.sample_rate, format="WAV")
-        else:
-            try:
-                with SoundFile(fname, mode="r+") as wav_file:
-                    wav_file.seek(0, soundfile.SEEK_END)
-                    wav_file.write(out_arr)
-            except Exception as e:
+        try:
+            out_arr = wav.view(-1).cpu().numpy()
+            fname = self.out_dir + "/" + self.out_name + ".wav"
+            import soundfile
+            from soundfile import SoundFile
+            if overwrite:
                 soundfile.write(fname, out_arr, samplerate=self.sample_rate, format="WAV")
-        # if self.mlDevice == "cuda":
-        #     torch.cuda.empty_cache()
+            else:
+                try:
+                    with SoundFile(fname, mode="r+") as wav_file:
+                        wav_file.seek(0, soundfile.SEEK_END)
+                        wav_file.write(out_arr)
+                except Exception as e:
+                    soundfile.write(fname, out_arr, samplerate=self.sample_rate, format="WAV")
+                    self.comm("[conversion-done]", "first")
+            # if self.mlDevice == "cuda":
+            #     torch.cuda.empty_cache()
+        except Exception as e:
+            self.output_err("Write error", e)
 
     def simple_convert(self, t):
         import torch
@@ -300,11 +305,13 @@ class Converter:
 
     def _convert(self):
         try:
+            from unicodedata import normalize
             self.pre_convert()
             txt = self.txt
             if len(txt) <= 30:
+                txt = normalize('NFKC', txt)
                 if self.language == 'zh':
-                    txt = process_cn_text(txt)
+                    txt = preprocess_cn_text(txt)
                 self.simple_convert(txt)
             else:
                 import re
@@ -336,24 +343,22 @@ class Converter:
                 srt_time = 0
 
                 for i, t in enumerate(sentence_list, 1):
-                    t_preview = t
+                    tp = t
                     self.output_status(
                         f"Converting part {i} out of {len(sentence_list)}: "
-                        f"{t_preview if len(t) < 30 else (t_preview[:30] + f'... ({len(t)})')}", end=" ")
+                        f"{t if len(t) < 30 else (t[:30] + f'... ({len(t)})')}", end=" ")
+                    t = general_preprocess(t)
                     if self.language == "zh":
-                        t = process_cn_text(t_preview)
-                        t = get_cn_num(t)
-                    else:
-                        t = t_preview
-                    l = 0
+                        t = preprocess_cn_text(t)
+                        t = replace_with_cn_num(t)
                     # try:
                     l = self.simple_convert(t)
                     # except Exception as e:
                         # self.output_status("\nError converting, retrying... " + str(e) + "\n")
                         # l = self.simple_convert(t[:len(t)//2]) + self.simple_convert(t[len(t)//2:])
 
-                    srt += f"{i}\n{parse_srt_time(srt_time)} --> {parse_srt_time(srt_time + l / self.sample_rate)}\n{t_preview}\n\n"
-                    lrc += f"[{parse_lrc_time(srt_time)}]{t_preview}\n"
+                    srt += f"{i}\n{parse_srt_time(srt_time)} --> {parse_srt_time(srt_time + l / self.sample_rate)}\n{tp}\n\n"
+                    lrc += f"[{parse_lrc_time(srt_time)}]{tp}\n"
                     srt_time += l / self.sample_rate
                 self.output_status("Generating subtitles/lyrics file...")
                 with open(f"{self.out_dir}/{self.out_name}.srt", encoding="utf-8", mode="w") as srt_file:
@@ -364,9 +369,9 @@ class Converter:
                 concurrent.futures.wait(self.save_tasks)
                 self.save_tasks.clear()
             self.comm("[conversion-done]")
-            self.output_status("Conversion done! Saved at " + os.path.abspath(f"{self.out_dir}/{self.out_name}.wav"))
+            self.output_status("[DONE]" + ("Conversion done! Saved at " if sys_lang == "en" else "转换完毕！结果保存在") + os.path.abspath(f"{self.out_dir}/{self.out_name}.wav"))
         except Exception as e:
-            self.output_err("Conversion error")
+            self.output_err("Conversion error", e)
 
     def output_err(self, err_type, e):
         import traceback
