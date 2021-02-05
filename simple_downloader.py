@@ -87,8 +87,8 @@ def download_and_unpack_voc(tag):
     tar.close()
 
 
-# print("Downloading ESP...")
-# for url in esp_urls: download_and_unpack_esp(url)
+print("Downloading ESP...")
+for url in esp_urls: download_and_unpack_esp(url)
 print("Downloading Vocoder...")
 for tag in vocoder_tags: download_and_unpack_voc(tag)
 print("Downloading NLTK...")

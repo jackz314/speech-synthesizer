@@ -50,7 +50,7 @@ jobs:
     - name: Download Models
       if: steps.cache-models.outputs.cache-hit != 'true'
       run: |
-        python3 ./simple_downloader.py
+        python ./simple_downloader.py
     - name: Build release
       run: |
         pyinstaller .\ui.spec --noconfirm
