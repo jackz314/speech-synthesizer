@@ -24,7 +24,7 @@ a = Analysis(['ui.py'],
              (librosa_path + "/util/example_data", "librosa/util/example_data"),
              (g2p_path + "/", "g2p_en")
                 ],
-             hiddenimports=['gdown'],
+             hiddenimports=['gdown', 'pyzmq'],
              hookspath=[],
              runtime_hooks=[],
              excludes=[],
